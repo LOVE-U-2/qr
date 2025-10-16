@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Advanced QR Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#071026;
+    --card: rgba(255,255,255,0.04);
+    --muted:#97a6b8;
+    --glass: rgba(255,255,255,0.03);
+    --accent1: #14b8a6;
+    --accent2: #3b82f6;
+    --accent-grad: linear-gradient(90deg,var(--accent1),var(--accent2));
+    --radius:14px;
+  }
+  *{box-sizing:border-box;font-family:'Poppins',sans-serif}
+  body{
+    margin:0;
+    min-height:100vh;
+    background: radial-gradient(1200px 600px at 10% 10%, rgba(20,184,166,0.06), transparent),
+                linear-gradient(180deg,#031025 0%, #071026 100%);
+    color:#e9f0f7;
+    padding:28px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    gap:18px;
+  }
+  .wrap{
+    width:1100px;
+    max-width:100%;
+    display:grid;
+    grid-template-columns:440px 1fr;
+    gap:22px;
+    align-items:start;
+  }
+  .card{
+    background:var(--card);
+    border-radius:var(--radius);
+    padding:18px;
+    box-shadow: 0 12px 30px rgba(2,6,23,0.6);
+    border: 1px solid rgba(255,255,255,0.03);
+  }
+  h1{margin:0 0 6px;font-size:20px;letter-spacing:-0.2px}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
+  input, select, textarea{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:#071328;color:#e8f0f7;font-size:14px}
+  input[type="color"]{height:40px;padding:4px}
+  .row{display:flex;gap:8px}
+  .row > *{flex:1}
+  .small{width:120px}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:10px;border:0;
+    background:var(--accent-grad);color:#04201a;font-weight:700;cursor:pointer;box-shadow:0 8px 18px rgba(59,130,246,0.12)
+  }
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+  .muted{color:var(--muted);font-size:13px}
+  .preview-area{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:18px;padding:18px;min-height:520px}
+  .preview-card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.015)); border-radius:12px;padding:18px;width:100%;display:flex;gap:14px;align-items:flex-start;flex-direction:column;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+  .designer{display:flex;align-items:center;gap:12px}
+  .designer .brand{font-weight:700;font-size:16px}
+  .qr-stage{width:420px;height:420px;border-radius:12px;background:linear-gradient(180deg, rgba(0,0,0,0.03), rgba(255,255,255,0.01));display:flex;align-items:center;justify-content:center;position:relative;overflow:visible}
+  /* frame wraps around - position via CSS transform with tx/ty offsets */
+  .frame-img{position:absolute;left:50%;top:50%;transform:translate(calc(-50% + var(--tx,0px)), calc(-50% + var(--ty,0px)));z-index:0;pointer-events:auto;user-select:none;max-width:180%;max-height:180%}
+  .qrCanvas{position:relative;z-index:1;pointer-events:none}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .note{font-size:13px;color:var(--muted)}
+  .group-title{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .flex-between{display:flex;justify-content:space-between;align-items:center}
+  .footer-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  input[type=file]{padding:8px}
+  input[type=range]{width:100%}
+  .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+  .small-muted{font-size:12px;color:var(--muted)}
+  @media (max-width:1000px){
+    .wrap{grid-template-columns:1fr; padding-bottom:40px}
+    .qr-stage{width:320px;height:320px}
+  }
+  /* small hint for draggable */
+  .drag-hint { position:absolute; bottom:8px; left:8px; font-size:12px; color:var(--muted); z-index:3 }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- LEFT: Controls -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <div>
+        <h1>QR Code Generator</h1>
+        <div class="small-muted">Make Your QR Code with stylish</div>
+      </div>
+      <div style="text-align:right">
+        <button id="resetBtn" class="btn ghost">Reset All</button>
+      </div>
+    </div>
+
+    <label>Text / URL</label>
+    <input id="text" type="text" value="https://bhabatosh-qrcode-generator.com">
+
+    <div class="row" style="margin-top:8px">
+      <div>
+        <label>Size (px)</label>
+        <input id="size" type="number" min="128" max="2048" value="400">
+      </div>
+      <div style="width:120px">
+        <label>Margin (px)</label>
+        <input id="margin" type="number" min="0" max="200" value="10">
+      </div>
+    </div>
+
+    <label>Code Density</label>
+    <select id="ec">
+      <option value="L">Low Code</option>
+      <option value="M" selected>Middium Code</option>
+      <option value="Q">Quality Code</option>
+      <option value="H">High Code</option>
+    </select>
+
+    <hr style="margin:12px 0;border:none;height:1px;background:rgba(255,255,255,0.02)">
+
+    <h3 style="margin:8px 0 0">🎨 Body Dots Shape</h3>
+    <label>Body Shape (dotsOptions.type)</label>
+    <select id="bodyShape">
+      <option value="extra-rounded">Extra rounded</option>
+      <option value="square">QR (square)</option>
+      <option value="rounded">Rounded</option>
+      <option value="dots">Dots</option>
+      <option value="classy">Classy</option>
+      <option value="classy-rounded">Classy rounded</option>
+    </select>
+    <label>Body Colors</label>
+    <div class="row">
+      <input type="color" id="bodyGrad1" value="#00a80e">
+      <input type="color" id="bodyGrad2" value="#da0000">
+    </div>
+    <label>Body Gradient Type</label>
+    <select id="bodyGradType">
+      <option value="radial">Radial</option>
+      <option value="linear">Linear</option>
+    </select>
+
+    <h3 style="margin-top:8px">👁 Eye Frame</h3>
+    <label>Eye Frame Shape</label>
+    <select id="eyeFrame">
+      <option value="classy-rounded">Classy rounded</option>
+      <option value="square">QR (square)</option>
+      <option value="dot">Dot</option>
+      <option value="rounded">Rounded</option>
+      <option value="extra-rounded">Extra rounded</option>
+      <option value="dots">Dots</option>
+      <option value="classy">Classy</option>
+    </select>
+    <label>Eye Frame Colors</label>
+    <div class="row">
+      <input type="color" id="eyeFrameGrad1" value="#000000">
+      <input type="color" id="eyeFrameGrad2" value="#00c853">
+    </div>
+    <label>Eye Frame Gradient Type</label>
+    <select id="eyeFrameGradType">
+      <option value="linear">Linear</option>
+      <option value="radial">Radial</option>
+    </select>
+
+    <h3 style="margin-top:8px">👁 Eye Ball</h3>
+    <label>Eye Ball Shape</label>
+    <select id="eyeBall">
+      <option value="classy-rounded">Classy rounded</option>
+      <option value="dot">QR (dot)</option>
+      <option value="square">Square</option>
+      <option value="rounded">Rounded</option>
+      <option value="dots">Dots</option>
+      <option value="classy">Classy</option>
+      <option value="extra-rounded">Extra rounded</option>
+    </select>
+    <label>Eye Ball Colors</label>
+    <div class="row">
+      <input type="color" id="eyeBallGrad1" value="#000000">
+      <input type="color" id="eyeBallGrad2" value="#2962ff">
+    </div>
+    <label>Eye Ball Gradient Type</label>
+    <select id="eyeBallGradType">
+      <option value="linear">Linear</option>
+      <option value="radial">Radial</option>
+    </select>
+
+    <hr style="margin:12px 0;border:none;height:1px;background:rgba(255,255,255,0.02)">
+
+    <h3>🖼 Logo</h3>
+    <label>Logo image</label>
+    <input type="file" id="logoFile" accept="image/*">
+    <label style="margin-top:6px"><input type="checkbox" id="logoBgRemove"> Remove background behind logo (hide dots under image)</label>
+    <label>Logo Size (%) — recommended ≤50%</label>
+    <input type="range" id="logoSize" min="10" max="80" value="30">
+
+    <h3 style="margin-top:8px">🖼 Frame (new)</h3>
+    <label>Upload Frame Image (PNG/JPG) — will wrap around QR</label>
+    <input type="file" id="frameFile" accept="image/*">
+    <label>Frame Size (%) — >100% wraps beyond QR</label>
+    <input type="range" id="frameSize" min="100" max="180" value="110">
+    <label style="margin-top:6px"><input type="checkbox" id="showFrame" checked> Show Frame in preview & download</label>
+    <div class="small-muted" style="margin-top:6px">Drag the frame in preview to reposition it.</div>
+
+    <h3 style="margin-top:8px">🎨 Background</h3>
+    <label>Background Color (canvas)</label>
+    <input type="color" id="bg" value="#ffffff">
+    <label style="margin-top:8px"><input type="checkbox" id="transparentBg"> Make QR Background Transparent</label>
+
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button id="generate" class="btn">Generate</button>
+      <button id="downloadBtn" class="btn">Download PNG (QR + Frame)</button>
+      <button id="downloadQrOnlyBtn" class="btn ghost">Download QR Only</button>
+    </div>
+
+    <div style="margin-top:12px" class="note">If you want more updates, WhatsApp directly on this number 9064899089</div>
+  </div>
+
+  <!-- RIGHT: Preview -->
+  <div class="card preview-area">
+    <div class="preview-card" style="width:100%">
+      <div class="designer" style="justify-content:space-between">
+        <div>
+          <div class="brand">BHABATOSH BARMAN</div>
+          <div class="small-muted">Preview</div>
+        </div>
+        <div class="controls">
+          <div class="small-muted">Size: <span id="previewSizeText">400</span>px</div>
+          <div class="small-muted">Margin: <span id="previewMarginText">10</span>px></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:20px;margin-top:14px;flex-wrap:wrap">
+        <div class="qr-stage" id="stage" aria-hidden="true">
+          <!-- Frame image (positioned behind QR). draggable -->
+          <img id="frameImg" class="frame-img" src="" style="display:none" alt="frame">
+          <!-- hint -->
+          <div class="drag-hint"></div>
+          <!-- Container where qr lib appends its canvas / svg -->
+          <div id="qrCanvas" class="qrCanvas"></div>
+        </div>
+
+        <div style="flex:1;min-width:220px">
+          <h2 style="margin-bottom:6px"></h2>
+          <div class="note"><strong>Preview:</strong> </div>
+          <div style="margin-top:12px">
+            <div class="muted">Quick actions</div>
+            <div class="footer-actions">
+              <button id="regenBtn" class="btn ghost">Regenerate Preview</button>
+              <button id="centerBtn" class="btn ghost">Center Frame</button>
+            </div>
+          </div>
+          <div style="margin-top:12px" class="muted"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- qr-code-styling lib -->
+<script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.js"></script>
+<script>
+/* ---------- helper to build either color OR gradient object ---------- */
+function buildColorOrGradient(c1, c2, gradType) {
+  if (!c1) c1 = '#000';
+  if (!c2) c2 = c1;
+  if (c1.toLowerCase() === c2.toLowerCase()) {
+    return { color: c1 };
+  }
+  return {
+    gradient: {
+      type: gradType === 'radial' ? 'radial' : 'linear',
+      rotation: 0,
+      colorStops: [
+        { offset: 0, color: c1 },
+        { offset: 1, color: c2 }
+      ]
+    }
+  };
+}
+
+/* ------------ initial QR instance ------------- */
+let qr = new QRCodeStyling({
+  width: 400,
+  height: 400,
+  data: "https://bhabatosh-qrcode-generator.com",
+  dotsOptions: { color: "#000", type: "square" },
+  backgroundOptions: { color: "#fff" },
+  cornersSquareOptions: { type: "square", color: "#000" },
+  cornersDotOptions: { type: "dot", color: "#000" }
+});
+
+/* Append to preview container (library will create a canvas or svg) */
+const qrContainer = document.getElementById("qrCanvas");
+qr.append(qrContainer);
+
+/* cached DOM */
+const els = {
+  text: document.getElementById('text'),
+  size: document.getElementById('size'),
+  margin: document.getElementById('margin'),
+  ec: document.getElementById('ec'),
+  bodyShape: document.getElementById('bodyShape'),
+  bodyGrad1: document.getElementById('bodyGrad1'),
+  bodyGrad2: document.getElementById('bodyGrad2'),
+  bodyGradType: document.getElementById('bodyGradType'),
+  eyeFrame: document.getElementById('eyeFrame'),
+  eyeFrameGrad1: document.getElementById('eyeFrameGrad1'),
+  eyeFrameGrad2: document.getElementById('eyeFrameGrad2'),
+  eyeFrameGradType: document.getElementById('eyeFrameGradType'),
+  eyeBall: document.getElementById('eyeBall'),
+  eyeBallGrad1: document.getElementById('eyeBallGrad1'),
+  eyeBallGrad2: document.getElementById('eyeBallGrad2'),
+  eyeBallGradType: document.getElementById('eyeBallGradType'),
+  logoFile: document.getElementById('logoFile'),
+  logoBgRemove: document.getElementById('logoBgRemove'),
+  logoSize: document.getElementById('logoSize'),
+  frameFile: document.getElementById('frameFile'),
+  frameSize: document.getElementById('frameSize'),
+  showFrame: document.getElementById('showFrame'),
+  bg: document.getElementById('bg'),
+  transparentBg: document.getElementById('transparentBg'),
+  generate: document.getElementById('generate'),
+  downloadBtn: document.getElementById('downloadBtn'),
+  downloadQrOnlyBtn: document.getElementById('downloadQrOnlyBtn'),
+  qrCanvasDiv: document.getElementById('qrCanvas'),
+  frameImgEl: document.getElementById('frameImg'),
+  previewSizeText: document.getElementById('previewSizeText'),
+  previewMarginText: document.getElementById('previewMarginText'),
+  resetBtn: document.getElementById('resetBtn'),
+  regenBtn: document.getElementById('regenBtn'),
+  centerBtn: document.getElementById('centerBtn'),
+  stage: document.getElementById('stage')
+};
+
+/* defaults for reset */
+const DEFAULTS = {
+  text: "https://bhabatosh-qrcode-generator.com",
+  size: 400,
+  margin: 10,
+  ec: "M",
+  bodyShape: "square",
+  bodyGrad1: "#000000",
+  bodyGrad2: "#ff3b3b",
+  bodyGradType: "linear",
+  eyeFrame: "square",
+  eyeFrameGrad1: "#000000",
+  eyeFrameGrad2: "#00c853",
+  eyeFrameGradType: "linear",
+  eyeBall: "dot",
+  eyeBallGrad1: "#000000",
+  eyeBallGrad2: "#2962ff",
+  eyeBallGradType: "linear",
+  logoSize: 30,
+  logoBgRemove: false,
+  frameSize: 110,
+  showFrame: true,
+  bg: "#ffffff",
+  transparentBg: false
+};
+
+/* set preview labels */
+function updatePreviewLabels() {
+  els.previewSizeText.textContent = els.size.value;
+  els.previewMarginText.textContent = els.margin.value;
+}
+
+/* load image file to Image object and return Promise<Image> */
+function loadImageFromFile(file) {
+  return new Promise((res, rej) => {
+    if (!file) return res(null);
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      img.onload = () => res(img);
+      img.onerror = (err) => rej(err);
+      img.src = e.target.result;
+    };
+    reader.onerror = rej;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* variables for last loaded images and draggable offsets */
+let lastFrameImage = null;
+let lastLogoImage = null;
+let frameOffset = { x: 0, y: 0 }; // px offsets applied to center
+let dragging = false;
+let dragStart = { x: 0, y: 0 };
+let startOffset = { x: 0, y: 0 };
+
+/* updates the QR configuration and preview (does not trigger download) */
+async function updateQR() {
+  updatePreviewLabels();
+
+  const size = Number(els.size.value) || 400;
+  const margin = Number(els.margin.value) || 0;
+  const data = els.text.value || "";
+  const ec = els.ec.value || "M";
+
+  const bodyType = els.bodyShape.value;
+  const bodyGrad1 = els.bodyGrad1.value;
+  const bodyGrad2 = els.bodyGrad2.value;
+  const bodyGradType = els.bodyGradType.value;
+
+  const eyeFrameType = els.eyeFrame.value;
+  const eyeFrameGrad1 = els.eyeFrameGrad1.value;
+  const eyeFrameGrad2 = els.eyeFrameGrad2.value;
+  const eyeFrameGradType = els.eyeFrameGradType.value;
+
+  const eyeBallType = els.eyeBall.value;
+  const eyeBallGrad1 = els.eyeBallGrad1.value;
+  const eyeBallGrad2 = els.eyeBallGrad2.value;
+  const eyeBallGradType = els.eyeBallGradType.value;
+
+  // background: if transparentBg checked, instruct library to use transparent background
+  const transparentBg = els.transparentBg.checked;
+  const bgColor = els.bg.value || "#ffffff";
+
+  // build config
+  const config = {
+    width: size,
+    height: size,
+    margin: margin,
+    data: data,
+    qrOptions: { errorCorrectionLevel: ec },
+    backgroundOptions: transparentBg ? { color: "transparent" } : buildColorOrGradient(bgColor, bgColor, 'linear'),
+    dotsOptions: Object.assign({ type: bodyType }, buildColorOrGradient(bodyGrad1, bodyGrad2, bodyGradType)),
+    cornersSquareOptions: Object.assign({ type: eyeFrameType }, buildColorOrGradient(eyeFrameGrad1, eyeFrameGrad2, eyeFrameGradType)),
+    cornersDotOptions: Object.assign({ type: eyeBallType }, buildColorOrGradient(eyeBallGrad1, eyeBallGrad2, eyeBallGradType))
+  };
+
+  // handle logo if exists
+  const logoFile = els.logoFile.files[0];
+  if (logoFile) {
+    const logoImg = await loadImageFromFile(logoFile);
+    if (logoImg) {
+      const tmp = document.createElement('canvas');
+      tmp.width = logoImg.width;
+      tmp.height = logoImg.height;
+      const tctx = tmp.getContext('2d');
+      tctx.drawImage(logoImg,0,0);
+      config.image = tmp.toDataURL('image/png');
+      config.imageOptions = {
+        crossOrigin: "anonymous",
+        margin: els.logoBgRemove.checked ? 0 : 8,
+        hideBackgroundDots: !!els.logoBgRemove.checked,
+        imageSize: Math.max(0.01, Math.min(0.95, Number(els.logoSize.value) / 100))
+      };
+      lastLogoImage = logoImg;
+    }
+  } else {
+    config.image = undefined;
+    lastLogoImage = null;
+  }
+
+  // update qr using library
+  qr.update(config);
+
+  // handle frame preview: load image and display as element sized relative to stage
+  const frameFile = els.frameFile.files[0];
+  if (frameFile && els.showFrame.checked) {
+    try {
+      const frameImg = await loadImageFromFile(frameFile);
+      lastFrameImage = frameImg;
+      // set preview element (use dataURL so we can revoke later if needed)
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        els.frameImgEl.src = e.target.result;
+      };
+      reader.readAsDataURL(frameFile);
+      els.frameImgEl.style.display = 'block';
+      // size based on slider (frameSize percent)
+      const pct = Number(els.frameSize.value) || 110;
+      // compute CSS size: use stage size as base
+      const stageRect = els.stage.getBoundingClientRect();
+      const base = Math.min(stageRect.width, stageRect.height);
+      const cssSize = (pct/100) * base;
+      els.frameImgEl.style.width = cssSize + 'px';
+      els.frameImgEl.style.height = 'auto';
+      // ensure frame sits behind the QR
+      els.frameImgEl.style.zIndex = 0;
+      // apply current offsets via CSS var
+      els.frameImgEl.style.setProperty('--tx', frameOffset.x + 'px');
+      els.frameImgEl.style.setProperty('--ty', frameOffset.y + 'px');
+    } catch (e) {
+      console.warn('Frame load failed', e);
+      els.frameImgEl.style.display = 'none';
+      lastFrameImage = null;
+    }
+  } else {
+    els.frameImgEl.style.display = 'none';
+    lastFrameImage = null;
+  }
+}
+
+/* Compose merged PNG respecting frame offsets and full frame bounds */
+async function composeMergedPNG() {
+  await new Promise(r => setTimeout(r, 120)); // ensure QR is rendered
+
+  const qrElem = qrContainer.querySelector('canvas') || qrContainer.querySelector('svg');
+  if (!qrElem) throw new Error('QR output not found in preview area.');
+
+  const qrSize = Number(els.size.value) || 400;
+
+  // Determine frame bounds
+  let frameLeft = 0, frameTop = 0, frameRight = qrSize, frameBottom = qrSize;
+  if (lastFrameImage && els.showFrame.checked) {
+    const stageRect = els.stage.getBoundingClientRect();
+    const framePct = Number(els.frameSize.value) || 110;
+    const targetWidth = (framePct / 100) * qrSize; // scale relative to QR
+    const scale = targetWidth / lastFrameImage.width;
+    const drawW = lastFrameImage.width * scale;
+    const drawH = lastFrameImage.height * scale;
+
+    // frame center relative to QR center plus offsets
+    const cx = qrSize/2 + (frameOffset.x || 0);
+    const cy = qrSize/2 + (frameOffset.y || 0);
+
+    frameLeft = cx - drawW/2;
+    frameTop = cy - drawH/2;
+    frameRight = cx + drawW/2;
+    frameBottom = cy + drawH/2;
+  }
+
+  // Compute canvas size to include full frame
+  const canvasLeft = Math.min(0, frameLeft);
+  const canvasTop = Math.min(0, frameTop);
+  const canvasRight = Math.max(qrSize, frameRight);
+  const canvasBottom = Math.max(qrSize, frameBottom);
+  const canvasWidth = canvasRight - canvasLeft;
+  const canvasHeight = canvasBottom - canvasTop;
+
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = canvasWidth;
+  outCanvas.height = canvasHeight;
+  const outCtx = outCanvas.getContext('2d');
+
+  // background
+  if (!els.transparentBg.checked) {
+    outCtx.fillStyle = els.bg.value || '#ffffff';
+    outCtx.fillRect(0,0,canvasWidth,canvasHeight);
+  } else {
+    outCtx.clearRect(0,0,canvasWidth,canvasHeight);
+  }
+
+  // Draw frame first
+  if (lastFrameImage && els.showFrame.checked) {
+    const framePct = Number(els.frameSize.value) || 110;
+    const targetWidth = (framePct/100) * qrSize;
+    const scale = targetWidth / lastFrameImage.width;
+    const drawW = lastFrameImage.width * scale;
+    const drawH = lastFrameImage.height * scale;
+
+    const cx = qrSize/2 + (frameOffset.x || 0);
+    const cy = qrSize/2 + (frameOffset.y || 0);
+
+    // offset by canvasLeft/canvasTop so everything fits
+    outCtx.drawImage(lastFrameImage,
+      cx - drawW/2 - canvasLeft,
+      cy - drawH/2 - canvasTop,
+      drawW, drawH
+    );
+  }
+
+  // Draw QR
+  if (qrElem.tagName.toLowerCase() === 'canvas') {
+    outCtx.drawImage(qrElem, -canvasLeft, -canvasTop, qrSize, qrSize);
+  } else {
+    const svg = qrElem.outerHTML;
+    const svgBlob = new Blob([svg], {type: 'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise((resolve, reject) => {
+      img.onload = () => {
+        outCtx.drawImage(img, -canvasLeft, -canvasTop, qrSize, qrSize);
+        URL.revokeObjectURL(url);
+        resolve();
+      };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
+
+  return outCanvas.toDataURL('image/png');
+}
+
+/* Download helper */
+function triggerDownload(dataUrl, filename='qr-image.png') {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/* Event wiring */
+els.generate.addEventListener('click', async () => {
+  try {
+    await updateQR();
+  } catch (e) {
+    console.error(e);
+    alert('Failed to update QR: ' + (e?.message || e));
+  }
+});
+
+els.regenBtn.addEventListener('click', async () => {
+  await updateQR();
+});
+
+/* center frame button sets offsets to 0 (center) */
+els.centerBtn.addEventListener('click', () => {
+  frameOffset.x = 0;
+  frameOffset.y = 0;
+  if (els.frameImgEl) {
+    els.frameImgEl.style.setProperty('--tx', frameOffset.x + 'px');
+    els.frameImgEl.style.setProperty('--ty', frameOffset.y + 'px');
+  }
+});
+
+/* Download merged (frame + qr) */
+els.downloadBtn.addEventListener('click', async () => {
+  try {
+    await updateQR();
+    const dataUrl = await composeMergedPNG();
+    triggerDownload(dataUrl, 'qr-with-frame.png');
+  } catch (e) {
+    console.error(e);
+    alert('Download failed: ' + (e?.message || e));
+  }
+});
+
+/* Download QR only */
+els.downloadQrOnlyBtn.addEventListener('click', async () => {
+  try {
+    await updateQR();
+    const qrElem = qrContainer.querySelector('canvas') || qrContainer.querySelector('svg');
+    if (!qrElem) throw new Error('QR output not found.');
+    if (qrElem.tagName.toLowerCase() === 'canvas') {
+      // if user requested transparent background and library created a white canvas, we still get the canvas's pixels.
+      const dataUrl = qrElem.toDataURL('image/png');
+      triggerDownload(dataUrl, 'qr-only.png');
+    } else {
+      const svg = qrElem.outerHTML;
+      const svgBlob = new Blob([svg], {type: 'image/svg+xml;charset=utf-8'});
+      const url = URL.createObjectURL(svgBlob);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = Number(els.size.value) || 400;
+        c.height = Number(els.size.value) || 400;
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        URL.revokeObjectURL(url);
+        triggerDownload(c.toDataURL('image/png'),'qr-only.png');
+      };
+      img.onerror = (err) => { URL.revokeObjectURL(url); alert('Failed to convert svg'); };
+      img.src = url;
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Download QR only failed: ' + (e?.message || e));
+  }
+});
+
+/* Update preview when relevant inputs change */
+const liveControls = ['text','size','margin','bodyShape','bodyGrad1','bodyGrad2','bodyGradType','eyeFrame','eyeFrameGrad1','eyeFrameGrad2','eyeFrameGradType','eyeBall','eyeBallGrad1','eyeBallGrad2','eyeBallGradType','bg','logoBgRemove','logoSize','frameSize','showFrame','transparentBg'];
+liveControls.forEach(id => document.getElementById(id).addEventListener('input', updateQR));
+liveControls.forEach(id => document.getElementById(id).addEventListener('change', updateQR));
+
+/* Reset to defaults */
+els.resetBtn.addEventListener('click', () => {
+  els.text.value = DEFAULTS.text;
+  els.size.value = DEFAULTS.size;
+  els.margin.value = DEFAULTS.margin;
+  els.ec.value = DEFAULTS.ec;
+  els.bodyShape.value = DEFAULTS.bodyShape;
+  els.bodyGrad1.value = DEFAULTS.bodyGrad1;
+  els.bodyGrad2.value = DEFAULTS.bodyGrad2;
+  els.bodyGradType.value = DEFAULTS.bodyGradType;
+  els.eyeFrame.value = DEFAULTS.eyeFrame;
+  els.eyeFrameGrad1.value = DEFAULTS.eyeFrameGrad1;
+  els.eyeFrameGrad2.value = DEFAULTS.eyeFrameGrad2;
+  els.eyeFrameGradType.value = DEFAULTS.eyeFrameGradType;
+  els.eyeBall.value = DEFAULTS.eyeBall;
+  els.eyeBallGrad1.value = DEFAULTS.eyeBallGrad1;
+  els.eyeBallGrad2.value = DEFAULTS.eyeBallGrad2;
+  els.eyeBallGradType.value = DEFAULTS.eyeBallGradType;
+  els.logoSize.value = DEFAULTS.logoSize;
+  els.logoBgRemove.checked = DEFAULTS.logoBgRemove;
+  els.frameSize.value = DEFAULTS.frameSize;
+  els.showFrame.checked = DEFAULTS.showFrame;
+  els.bg.value = DEFAULTS.bg;
+  els.transparentBg.checked = DEFAULTS.transparentBg;
+  // clear file inputs
+  els.frameFile.value = '';
+  els.logoFile.value = '';
+  // hide preview frame and reset offsets
+  els.frameImgEl.style.display = 'none';
+  lastFrameImage = null;
+  lastLogoImage = null;
+  frameOffset = { x:0, y:0 };
+  els.frameImgEl.style.setProperty('--tx', '0px');
+  els.frameImgEl.style.setProperty('--ty', '0px');
+  updateQR();
+});
+
+/* Load frame or logo immediately when file chosen */
+els.frameFile.addEventListener('change', async () => {
+  // reset offsets so user can reposition if they want
+  frameOffset = { x: 0, y: 0 };
+  els.frameImgEl.style.setProperty('--tx', '0px');
+  els.frameImgEl.style.setProperty('--ty', '0px');
+  await updateQR();
+});
+els.logoFile.addEventListener('change', async () => {
+  await updateQR();
+});
+
+/* Draggable frame implementation - drag only (no zoom) */
+function getPointer(e) {
+  if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  return { x: e.clientX, y: e.clientY };
+}
+els.frameImgEl.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  dragging = true;
+  dragStart = getPointer(e);
+  startOffset = { x: frameOffset.x, y: frameOffset.y };
+  // bring frame above for easier dragging
+  els.frameImgEl.style.zIndex = 5;
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const p = getPointer(e);
+  const dx = p.x - dragStart.x;
+  const dy = p.y - dragStart.y;
+  frameOffset.x = startOffset.x + dx;
+  frameOffset.y = startOffset.y + dy;
+  els.frameImgEl.style.setProperty('--tx', frameOffset.x + 'px');
+  els.frameImgEl.style.setProperty('--ty', frameOffset.y + 'px');
+});
+window.addEventListener('mouseup', (e) => {
+  if (!dragging) return;
+  dragging = false;
+  els.frameImgEl.style.zIndex = 0;
+});
+/* touch handlers */
+els.frameImgEl.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  dragging = true;
+  const p = getPointer(e);
+  dragStart = p;
+  startOffset = { x: frameOffset.x, y: frameOffset.y };
+  els.frameImgEl.style.zIndex = 5;
+}, {passive:false});
+window.addEventListener('touchmove', (e) => {
+  if (!dragging) return;
+  const p = getPointer(e);
+  const dx = p.x - dragStart.x;
+  const dy = p.y - dragStart.y;
+  frameOffset.x = startOffset.x + dx;
+  frameOffset.y = startOffset.y + dy;
+  els.frameImgEl.style.setProperty('--tx', frameOffset.x + 'px');
+  els.frameImgEl.style.setProperty('--ty', frameOffset.y + 'px');
+}, {passive:false});
+window.addEventListener('touchend', (e) => {
+  if (!dragging) return;
+  dragging = false;
+  els.frameImgEl.style.zIndex = 0;
+});
+
+/* initial render */
+updateQR();
+</script>
+</body>
+</html>
